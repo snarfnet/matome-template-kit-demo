@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Matome Template Kit</title>
+  <meta name="description" content="まとめサイトURLから記事一覧を作る買い切りテンプレートキット">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="side">
+      <div class="brand">
+        <span class="brand-mark">M</span>
+        <div>
+          <strong>Matome Kit</strong>
+          <small>Aggregator template</small>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="管理メニュー">
+        <button class="nav-button active" data-panel="sources">サイト登録</button>
+        <button class="nav-button" data-panel="dashboard">記事管理</button>
+        <button class="nav-button" data-panel="site">公開ページ</button>
+        <button class="nav-button" data-panel="ads">広告管理</button>
+        <button class="nav-button" data-panel="templates">テンプレート</button>
+        <button class="nav-button" data-panel="export">書き出し</button>
+      </nav>
+
+      <div class="template-picker">
+        <label for="templateSelect">デザイン</label>
+        <select id="templateSelect"></select>
+      </div>
+
+      <div class="mini-stats">
+        <div><b id="statArticles">0</b><span>記事</span></div>
+        <div><b id="statSites">0</b><span>サイト</span></div>
+        <div><b id="statCats">0</b><span>カテゴリ</span></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="topbar">
+        <div>
+          <p class="eyebrow">WordPressなしで運用</p>
+          <h1>まとめサイトを集めるサイトを作る</h1>
+        </div>
+        <div class="top-actions">
+          <button class="ghost" id="seedButton">サンプル復元</button>
+          <button class="primary" id="previewButton">公開ページを見る</button>
+        </div>
+      </section>
+
+      <section class="panel active" id="panel-sources">
+        <div class="source-grid">
+          <form class="card form-card" id="sourceForm">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Source</p>
+                <h2>まとめサイトURLを登録</h2>
+              </div>
+              <span class="pill">記事リンクを一括取得</span>
+            </div>
+
+            <label>
+              まとめサイトURL
+              <input id="sourceUrlInput" type="url" placeholder="https://example-matome.com/" required>
+            </label>
+
+            <div class="two-cols">
+              <label>
+                サイト名
+                <input id="sourceNameInput" type="text" placeholder="未入力ならURLから自動">
+              </label>
+              <label>
+                カテゴリ
+                <input id="sourceCategoryInput" type="text" placeholder="総合">
+              </label>
+            </div>
+
+            <div class="two-cols">
+              <label>
+                取得件数
+                <select id="sourceLimitInput">
+                  <option value="10">10件</option>
+                  <option value="20" selected>20件</option>
+                  <option value="30">30件</option>
+                </select>
+              </label>
+              <label>
+                注目度
+                <select id="sourceRankInput">
+                  <option value="1">通常</option>
+                  <option value="2" selected>注目</option>
+                  <option value="3">人気</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button class="primary" type="submit" id="scanSourceButton">記事一覧を取得</button>
+              <button class="ghost" type="button" id="clearSourceButton">クリア</button>
+            </div>
+            <p class="hint" id="sourceStatus">URLを入れると、同じサイト内の記事リンク候補を抽出します。全文転載ではなく、リンク集として公開します。</p>
+          </form>
+
+          <section class="card list-card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Candidates</p>
+                <h2>取得した記事候補</h2>
+              </div>
+              <button class="primary" id="importSelectedButton">選択を追加</button>
+            </div>
+            <div class="candidate-list" id="candidateList"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-dashboard">
+        <div class="editor-grid">
+          <form class="card form-card" id="articleForm">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Manual</p>
+                <h2>記事URLを手動登録</h2>
+              </div>
+              <span class="pill">1件ずつ追加</span>
+            </div>
+
+            <label>
+              URL
+              <div class="url-row">
+                <input id="urlInput" type="url" placeholder="https://example.com/article" required>
+                <button type="button" id="fetchButton">取得</button>
+              </div>
+            </label>
+
+            <label>
+              タイトル
+              <input id="titleInput" type="text" placeholder="記事タイトル" required>
+            </label>
+
+            <div class="two-cols">
+              <label>
+                サイト名
+                <input id="siteInput" type="text" placeholder="引用元サイト名">
+              </label>
+              <label>
+                カテゴリ
+                <input id="categoryInput" type="text" list="categoryList" placeholder="総合">
+                <datalist id="categoryList"></datalist>
+              </label>
+            </div>
+
+            <label>
+              説明文
+              <textarea id="descriptionInput" rows="4" placeholder="短い紹介文。全文転載ではなく、要約やコメントに留めます。"></textarea>
+            </label>
+
+            <div class="two-cols">
+              <label>
+                画像URL
+                <input id="imageInput" type="url" placeholder="https://example.com/ogp.jpg">
+              </label>
+              <label>
+                注目度
+                <select id="rankInput">
+                  <option value="1">通常</option>
+                  <option value="2">注目</option>
+                  <option value="3">人気</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button class="primary" type="submit" id="saveButton">記事を保存</button>
+              <button class="ghost" type="button" id="clearButton">入力をクリア</button>
+            </div>
+            <p class="hint" id="fetchStatus">URL取得は相手サイトの設定で失敗する場合があります。その時は手入力してください。</p>
+          </form>
+
+          <section class="card list-card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Queue</p>
+                <h2>登録記事</h2>
+              </div>
+              <input id="searchInput" type="search" placeholder="検索">
+            </div>
+            <div class="article-list" id="adminArticleList"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-site">
+        <div id="publicSite" class="public-site"></div>
+      </section>
+
+      <section class="panel" id="panel-ads">
+        <div class="ads-grid">
+          <form class="card form-card" id="adForm">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Ads</p>
+                <h2>広告スペースを作る</h2>
+              </div>
+              <span class="pill">Google広告サイズ対応</span>
+            </div>
+
+            <label>
+              広告名
+              <input id="adNameInput" type="text" placeholder="サイドバー広告" required>
+            </label>
+
+            <div class="two-cols">
+              <label>
+                表示位置
+                <select id="adPlacementInput">
+                  <option value="top">記事一覧の上</option>
+                  <option value="middle">記事一覧の途中</option>
+                  <option value="bottom">記事一覧の下</option>
+                  <option value="sidebar" selected>サイドバー</option>
+                </select>
+              </label>
+              <label>
+                サイズ
+                <select id="adSizeInput"></select>
+              </label>
+            </div>
+
+            <label>
+              広告コード / メモ
+              <textarea id="adCodeInput" rows="6" placeholder="AdSenseのinsタグや、仮の広告HTMLを貼れます。空ならプレビュー枠を表示します。"></textarea>
+            </label>
+
+            <div class="form-actions">
+              <button class="primary" type="submit" id="saveAdButton">広告を保存</button>
+              <button class="ghost" type="button" id="clearAdButton">クリア</button>
+            </div>
+            <p class="hint">AdSenseはレスポンシブが基本です。固定サイズを使う場合は、スマホで横幅を超えない配置にしてください。</p>
+          </form>
+
+          <section class="card list-card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Slots</p>
+                <h2>広告枠一覧</h2>
+              </div>
+            </div>
+            <div class="ad-list" id="adList"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="panel" id="panel-templates">
+        <div class="template-board" id="templateBoard"></div>
+      </section>
+
+      <section class="panel" id="panel-export">
+        <div class="export-grid">
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Data</p>
+                <h2>データ書き出し</h2>
+              </div>
+            </div>
+            <p class="body-copy">登録サイトと記事データをJSONで保存できます。</p>
+            <button class="primary" id="downloadJsonButton">JSONを保存</button>
+          </section>
+
+          <section class="card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">HTML</p>
+                <h2>公開HTML</h2>
+              </div>
+            </div>
+            <p class="body-copy">現在の記事一覧を、単体HTMLとしてコピーできます。</p>
+            <button class="ghost" id="copyHtmlButton">HTMLをコピー</button>
+            <textarea id="exportOutput" rows="12" readonly></textarea>
+          </section>
+
+          <section class="card warning">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Notice</p>
+                <h2>販売時の注意</h2>
+              </div>
+            </div>
+            <p class="body-copy">このキットはリンク集テンプレートです。他サイト本文の丸ごと転載、画像の無断保存、出典を消す運用は避けてください。</p>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
