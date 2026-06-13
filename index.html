@@ -97,8 +97,14 @@
               </label>
             </div>
 
+            <label class="check-row">
+              <input id="sourceAutoInput" type="checkbox" checked>
+              <span>登録後、自動取得の対象にする</span>
+            </label>
+
             <div class="form-actions">
               <button class="primary" type="submit" id="scanSourceButton">記事一覧を取得</button>
+              <button class="ghost" type="button" id="refreshAllSourcesButton">全サイト更新</button>
               <button class="ghost" type="button" id="clearSourceButton">クリア</button>
             </div>
             <p class="hint" id="sourceStatus">URLを入れると、同じサイト内の記事リンク候補を抽出します。全文転載ではなく、リンク集として公開します。</p>
@@ -113,6 +119,16 @@
               <button class="primary" id="importSelectedButton">選択を追加</button>
             </div>
             <div class="candidate-list" id="candidateList"></div>
+          </section>
+
+          <section class="card list-card source-list-card">
+            <div class="card-head">
+              <div>
+                <p class="eyebrow">Auto fetch</p>
+                <h2>登録済みサイト</h2>
+              </div>
+            </div>
+            <div class="source-list" id="sourceList"></div>
           </section>
         </div>
       </section>

@@ -24,6 +24,8 @@ const adPresets = [
   { id: "160x600", name: "ワイドスカイスクレイパー 160x600", width: 160, height: 600, note: "PCサイドバー" }
 ];
 
+const AUTO_FETCH_INTERVAL_MS = 15 * 60 * 1000;
+
 const sampleArticles = [
   articleSeed("https://example.com/news/ev-manual", "EVなのに疑似MTを再現する新技術が話題に", "サンプル速報", "総合", "SNSで反応が集まっている技術ニュース。リンク先の記事を紹介する形で掲載します。", 2, -28),
   articleSeed("https://example.com/entertainment/dress", "人気俳優のドレス姿に注目、写真投稿から一気に拡散", "芸能サンプルNEO", "芸能", "イベント写真をきっかけに関連ワードが急上昇。反応が集まっています。", 3, -64),
@@ -37,6 +39,8 @@ let editingId = null;
 let editingAdId = null;
 let selectedCategory = "all";
 let pendingCandidates = [];
+let autoFetchTimer = null;
+let isAutoFetching = false;
 
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => [...document.querySelectorAll(selector)];
@@ -58,10 +62,13 @@ const els = {
   sourceCategoryInput: qs("#sourceCategoryInput"),
   sourceLimitInput: qs("#sourceLimitInput"),
   sourceRankInput: qs("#sourceRankInput"),
+  sourceAutoInput: qs("#sourceAutoInput"),
   sourceStatus: qs("#sourceStatus"),
   clearSourceButton: qs("#clearSourceButton"),
+  refreshAllSourcesButton: qs("#refreshAllSourcesButton"),
   importSelectedButton: qs("#importSelectedButton"),
   candidateList: qs("#candidateList"),
+  sourceList: qs("#sourceList"),
   articleForm: qs("#articleForm"),
   urlInput: qs("#urlInput"),
   titleInput: qs("#titleInput"),
@@ -96,6 +103,7 @@ function init() {
   bindEvents();
   applyTemplate(state.templateId);
   render();
+  startAutoFetch();
 }
 
 function articleSeed(url, title, site, category, description, rank, minutes) {
@@ -148,6 +156,7 @@ function bindEvents() {
     scanSourceSite();
   });
   els.clearSourceButton.addEventListener("click", clearSourceForm);
+  els.refreshAllSourcesButton.addEventListener("click", () => refreshAllSources(true));
   els.importSelectedButton.addEventListener("click", importSelectedCandidates);
 
   els.adForm.addEventListener("submit", (event) => {
@@ -223,6 +232,7 @@ function applyTemplate(templateId) {
 
 function render() {
   renderCandidateList();
+  renderSourceList();
   renderAdminList();
   renderAdList();
   renderPublicSite();
@@ -263,28 +273,16 @@ async function scanSourceSite() {
   const category = els.sourceCategoryInput.value.trim() || "総合";
   const limit = Number(els.sourceLimitInput.value) || 20;
   const rank = Number(els.sourceRankInput.value) || 2;
+  const autoFetch = els.sourceAutoInput.checked;
 
   els.sourceStatus.textContent = "サイトを読み込んでいます。";
   pendingCandidates = [];
   renderCandidateList();
 
   try {
-    const markdown = await fetchReadableText(sourceUrl);
-    const candidates = extractArticleLinks(markdown, sourceUrl)
-      .filter((item) => !state.articles.some((article) => article.url === item.url))
-      .slice(0, limit)
-      .map((item) => ({
-        ...item,
-        site: sourceName,
-        category,
-        rank,
-        description: `${sourceName} の記事リンクです。`,
-        image: "",
-        checked: true
-      }));
-
+    const candidates = await fetchSourceCandidates({ url: sourceUrl, name: sourceName, category, limit, rank });
     pendingCandidates = candidates;
-    upsertSource(sourceUrl, sourceName, category);
+    upsertSource(sourceUrl, sourceName, category, { limit, rank, autoFetch, status: "ok", foundCount: candidates.length });
     els.sourceStatus.textContent = candidates.length
       ? `${candidates.length}件の記事候補を見つけました。追加したい記事にチェックを入れてください。`
       : "記事候補が見つかりませんでした。相手サイトが取得を制限しているか、リンク構造が特殊です。";
@@ -292,6 +290,23 @@ async function scanSourceSite() {
   } catch (error) {
     els.sourceStatus.textContent = "取得に失敗しました。サイト側の制限、CORS、アクセス拒否が原因のことがあります。";
   }
+}
+
+async function fetchSourceCandidates(source) {
+  const markdown = await fetchReadableText(source.url);
+  const existingUrls = new Set(state.articles.map((article) => article.url));
+  return extractArticleLinks(markdown, source.url)
+    .slice(0, Number(source.limit) || 20)
+    .filter((item) => !existingUrls.has(item.url))
+    .map((item) => ({
+      ...item,
+      site: source.name || getHost(source.url),
+      category: source.category || "総合",
+      rank: Number(source.rank) || 2,
+      description: `${source.name || getHost(source.url)} の記事リンクです。`,
+      image: "",
+      checked: true
+    }));
 }
 
 function extractArticleLinks(markdown, sourceUrl) {
@@ -356,15 +371,89 @@ function renderCandidateList() {
   });
 }
 
-function importSelectedCandidates() {
-  const selected = pendingCandidates.filter((item) => item.checked);
-  if (!selected.length) {
-    els.sourceStatus.textContent = "追加する記事を選んでください。";
+function renderSourceList() {
+  if (!state.sources.length) {
+    els.sourceList.innerHTML = `<p class="body-copy">登録済みサイトはまだありません。URLを取得すると、ここに保存されます。</p>`;
     return;
   }
 
+  els.sourceList.innerHTML = state.sources.map((source) => (
+    `<article class="source-item">
+      <div>
+        <p class="admin-title">${escapeHtml(source.name || getHost(source.url))}</p>
+        <div class="admin-meta">
+          ${escapeHtml(source.category || "総合")} / ${source.autoFetch === false ? "自動取得OFF" : "自動取得ON"} / 最終取得: ${source.lastScannedAt ? timeAgo(source.lastScannedAt) : "未取得"}
+        </div>
+        <small>${escapeHtml(source.url)}</small>
+      </div>
+      <div class="item-actions">
+        <button class="icon-button" title="今すぐ取得" data-refresh-source="${source.id}">R</button>
+        <button class="icon-button" title="自動取得切替" data-toggle-source="${source.id}">${source.autoFetch === false ? "ON" : "OFF"}</button>
+        <button class="icon-button" title="削除" data-delete-source="${source.id}">X</button>
+      </div>
+    </article>`
+  )).join("");
+
+  qsa("[data-refresh-source]").forEach((button) => button.addEventListener("click", () => refreshOneSource(button.dataset.refreshSource, true)));
+  qsa("[data-toggle-source]").forEach((button) => button.addEventListener("click", () => toggleSourceAutoFetch(button.dataset.toggleSource)));
+  qsa("[data-delete-source]").forEach((button) => button.addEventListener("click", () => deleteSource(button.dataset.deleteSource)));
+}
+
+async function refreshOneSource(id, showStatus = false) {
+  const source = state.sources.find((item) => item.id === id);
+  if (!source) return 0;
+
+  if (showStatus) els.sourceStatus.textContent = `${source.name || getHost(source.url)} を取得しています。`;
+
+  try {
+    const candidates = await fetchSourceCandidates(source);
+    const imported = addCandidatesAsArticles(candidates);
+    updateSourceScan(id, { status: "ok", foundCount: candidates.length, importedCount: imported });
+    if (showStatus) {
+      els.sourceStatus.textContent = imported
+        ? `${source.name || getHost(source.url)} から新着${imported}件を追加しました。`
+        : `${source.name || getHost(source.url)} に新着はありませんでした。`;
+    }
+    render();
+    return imported;
+  } catch {
+    updateSourceScan(id, { status: "error" });
+    if (showStatus) els.sourceStatus.textContent = `${source.name || getHost(source.url)} の取得に失敗しました。`;
+    renderSourceList();
+    return 0;
+  }
+}
+
+async function refreshAllSources(showStatus = false) {
+  if (isAutoFetching) return;
+  const targets = state.sources.filter((source) => source.autoFetch !== false);
+  if (!targets.length) {
+    if (showStatus) els.sourceStatus.textContent = "自動取得ONのサイトがありません。";
+    return;
+  }
+
+  isAutoFetching = true;
+  const beforeCount = state.articles.length;
+  if (showStatus) els.sourceStatus.textContent = `${targets.length}サイトを順番に取得しています。`;
+
+  for (const source of targets) {
+    await refreshOneSource(source.id, false);
+  }
+
+  isAutoFetching = false;
+  const total = state.articles.length - beforeCount;
+  if (showStatus) els.sourceStatus.textContent = total ? `全サイト更新で新着${total}件を追加しました。` : "全サイト更新しました。新着はありません。";
+  render();
+}
+
+function addCandidatesAsArticles(candidates) {
+  if (!candidates.length) return 0;
+  const existingUrls = new Set(state.articles.map((article) => article.url));
+  const fresh = candidates.filter((item) => !existingUrls.has(item.url));
+  if (!fresh.length) return 0;
+
   const now = Date.now();
-  const newArticles = selected.map((item, index) => ({
+  const newArticles = fresh.map((item, index) => ({
     id: crypto.randomUUID(),
     url: item.url,
     title: item.title,
@@ -375,20 +464,41 @@ function importSelectedCandidates() {
     rank: item.rank,
     createdAt: new Date(now - index * 60000).toISOString()
   }));
-
   state.articles = [...newArticles, ...state.articles];
-  pendingCandidates = [];
   saveState();
-  els.sourceStatus.textContent = `${newArticles.length}件を記事一覧へ追加しました。`;
+  return newArticles.length;
+}
+
+function startAutoFetch() {
+  if (autoFetchTimer) clearInterval(autoFetchTimer);
+  refreshAllSources(false);
+  autoFetchTimer = setInterval(() => refreshAllSources(false), AUTO_FETCH_INTERVAL_MS);
+}
+
+function importSelectedCandidates() {
+  const selected = pendingCandidates.filter((item) => item.checked);
+  if (!selected.length) {
+    els.sourceStatus.textContent = "追加する記事を選んでください。";
+    return;
+  }
+
+  const imported = addCandidatesAsArticles(selected);
+  pendingCandidates = [];
+  els.sourceStatus.textContent = `${imported}件を記事一覧へ追加しました。`;
   render();
   switchPanel("dashboard");
 }
 
-function upsertSource(url, name, category) {
+function upsertSource(url, name, category, options = {}) {
   const existing = state.sources.find((source) => source.url === url);
   if (existing) {
     existing.name = name;
     existing.category = category;
+    existing.limit = options.limit ?? existing.limit ?? 20;
+    existing.rank = options.rank ?? existing.rank ?? 2;
+    existing.autoFetch = options.autoFetch ?? existing.autoFetch ?? true;
+    existing.status = options.status || existing.status || "ok";
+    existing.foundCount = options.foundCount ?? existing.foundCount ?? 0;
     existing.lastScannedAt = new Date().toISOString();
   } else {
     state.sources.unshift({
@@ -396,10 +506,39 @@ function upsertSource(url, name, category) {
       url,
       name,
       category,
+      limit: options.limit ?? 20,
+      rank: options.rank ?? 2,
+      autoFetch: options.autoFetch ?? true,
+      status: options.status || "ok",
+      foundCount: options.foundCount ?? 0,
+      importedCount: 0,
       lastScannedAt: new Date().toISOString()
     });
   }
   saveState();
+}
+
+function updateSourceScan(id, options = {}) {
+  state.sources = state.sources.map((source) => source.id === id ? {
+    ...source,
+    status: options.status || source.status || "ok",
+    foundCount: options.foundCount ?? source.foundCount ?? 0,
+    importedCount: options.importedCount ?? source.importedCount ?? 0,
+    lastScannedAt: new Date().toISOString()
+  } : source);
+  saveState();
+}
+
+function toggleSourceAutoFetch(id) {
+  state.sources = state.sources.map((source) => source.id === id ? { ...source, autoFetch: source.autoFetch === false } : source);
+  saveState();
+  renderSourceList();
+}
+
+function deleteSource(id) {
+  state.sources = state.sources.filter((source) => source.id !== id);
+  saveState();
+  renderSourceList();
 }
 
 async function fetchArticleMeta() {
@@ -719,6 +858,7 @@ function deleteArticle(id) {
 
 function clearSourceForm() {
   els.sourceForm.reset();
+  els.sourceAutoInput.checked = true;
   pendingCandidates = [];
   els.sourceStatus.textContent = "URLを入れると、同じサイト内の記事リンク候補を抽出します。";
   renderCandidateList();

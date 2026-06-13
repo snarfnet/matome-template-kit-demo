@@ -298,6 +298,20 @@ textarea {
   gap: 12px;
 }
 
+.check-row {
+  display: flex;
+  grid-template-columns: none;
+  gap: 9px;
+  align-items: center;
+  color: var(--ink);
+}
+
+.check-row input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
 .hint,
 .body-copy {
   color: var(--muted);
@@ -357,6 +371,35 @@ textarea {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.source-list-card {
+  grid-column: 1 / -1;
+}
+
+.source-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.source-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.source-item small {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
